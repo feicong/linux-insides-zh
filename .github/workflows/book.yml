@@ -1,0 +1,75 @@
+# Copyright (c) 2025-2026 fei_cong(https://github.com/feicong/feicong-course)
+
+name: book
+
+on:
+  push:
+    branches:
+      - master
+    tags-ignore:
+      - '**'
+    paths:
+      - '.github/workflows/book.yml'
+      - 'book.toml'
+      - 'SUMMARY.md'
+      - 'README.md'
+      - 'cover.jpg'
+      - '**/*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: book-release
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build book
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends fonts-noto-cjk
+          google-chrome --version || google-chrome-stable --version || chromium --version || chromium-browser --version
+
+      - name: Install mdBook tools
+        run: cargo install mdbook mdbook-pdf mdbook-epub --locked
+
+      - name: Build book
+        run: mdbook build
+
+      - name: Collect release assets
+        run: |
+          mkdir -p dist
+          cp "book/pdf/output.pdf" "dist/linux-insides-zh.pdf"
+          cp "book/epub/Linux 内核揭秘.epub" "dist/linux-insides-zh.epub"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-insides-zh-book
+          path: dist/*
+          if-no-files-found: error
+
+      - name: Upload latest release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: latest
+          target_commitish: ${{ github.sha }}
+          body: Automated book build from ${{ github.sha }}.
+          make_latest: true
+          overwrite_files: true
+          fail_on_unmatched_files: true
+          files: |
+            dist/linux-insides-zh.pdf
+            dist/linux-insides-zh.epub
